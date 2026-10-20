@@ -3,14 +3,13 @@
 ###################################
 
 # install libraries if required
-list.of.packages <- c("tidyverse", "Biostrings")
+list.of.packages <- c("tidyverse")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)>0) {install.packages(new.packages)}
 rm(list.of.packages, new.packages)
 
 # load libraries
 library(tidyverse)
-library(Biostrings)
 
 #### read in the files ####
 
