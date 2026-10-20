@@ -1,0 +1,6 @@
+*.fna
+*.fa
+*.fasta
+*.gff
+*.gz
+*.Rdata
