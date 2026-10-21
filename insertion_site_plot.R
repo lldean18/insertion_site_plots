@@ -11,146 +11,33 @@ rm(list.of.packages, new.packages)
 # load libraries
 library(tidyverse)
 
-#### read in the files ####
+#### load the pre-processed insertion site data ####
 
-# assembly
-assembly <- readLines("323630L_Photorhabduskhanii.fna")
-# insertion sites
-insertions <- read.table("combined.insert_site_plot.gz")
-# annotation
-gff_lines <- readLines("323630L_Photorhabduskhanii.gff") # read each line separately
-fasta_start <- grep("^##FASTA", gff_lines) # Find the start of the FASTA section
-if (length(fasta_start) > 0) {
-  gff_lines <- gff_lines[seq_len(fasta_start[1] - 1)] # Remove the FASTA section if present
-}
-gff <- read.table(text = gff_lines, sep = "\t", header = FALSE, comment.char = "#",
-                  stringsAsFactors = FALSE) # Read the annotation into a data frame
-colnames(gff) <- c("chromosome","source","feature_type","start","end","score",
-                   "strand","phase","attributes") # Assign column names
-rm(fasta_start, gff_lines) # clean up
+load("insertion_sites.RData")
+load("insertion_sites_ecoli.RData")
 
 
-#### Process the fasta assembly ####
-# Find the chromosome headers
-header_lines <- grep("^>", assembly)
-# Extract chromosome names (removing > and any description after the first space)
-chromosome_names <- sub("^>([^[:space:]]+).*", "\\1", assembly[header_lines])
-
-# Calculate sequence lengths, accounting for sequences split over multiple lines
-chromosome_lengths <- integer(length(header_lines))
-for (i in seq_along(header_lines)) {
-  start <- header_lines[i] + 1
-  end <- if (i < length(header_lines)) header_lines[i + 1] - 1 else length(assembly)
-  
-  chromosome_lengths[i] <- sum(nchar(assembly[start:end]))
-}
-
-# Create the data frame
-genome_positions <- data.frame(
-  chromosome = rep(chromosome_names, chromosome_lengths),
-  position = unlist(lapply(chromosome_lengths, seq_len), use.names = FALSE))
-
-# tidy up
-rm(assembly, chromosome_lengths, chromosome_names, end, start, header_lines, i)
-
-#### Merge the assembly and insertion site info ####
-insertion_sites <- cbind(genome_positions, insertions)
-colnames(insertion_sites) <- c("chromosome","position","fwd_insertions","rev_insertions")
-# tidy up
-rm(genome_positions, insertions)
-
-#### Process the GFF annotation ####
-
-# remove columns containing the whole contigs as regions
-gff <- gff[gff$feature_type != "region", ]
-
-# extract feature names and ID's
-gff$feature_name <- sub(".*Name=([^;]+).*", "\\1", gff$attributes)
-gff$feature_ID <- sub(".*ID=([^;]+).*", "\\1", gff$attributes)
-# Set the name or ID to NA if no attribute exists
-gff$feature_name[!grepl("Name=", gff$attributes)] <- NA
-gff$feature_ID[!grepl("ID=", gff$attributes)] <- NA
-
-# add the feature names and ID's to the insertion sites data frame
-# Initialize new columns
-insertion_sites$feature_name <- NA_character_
-insertion_sites$feature_ID <- NA_character_
-insertion_sites$feature_strand <- NA_character_
-insertion_sites$feature_type <- NA_character_
-insertion_sites$feature_phase <- NA_character_
-
-# add the annotation information to the insertion sites data
-for (line in seq_len(nrow(gff))) {
-  annotation <- gff[line, ] # Get the current annotation line
-  # add feature names
-  insertion_sites$feature_name <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-           insertion_sites$position >= annotation$start &
-           insertion_sites$position <= annotation$end, annotation$feature_name, insertion_sites$feature_name)
-  # add feature IDs
-  insertion_sites$feature_ID <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                           insertion_sites$position >= annotation$start &
-                                           insertion_sites$position <= annotation$end,
-                                       annotation$feature_ID, insertion_sites$feature_ID)
-  # add feature strand
-  insertion_sites$feature_strand <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                         insertion_sites$position >= annotation$start &
-                                         insertion_sites$position <= annotation$end,
-                                       annotation$strand, insertion_sites$feature_strand)
-  # add feature type
-  insertion_sites$feature_type <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                             insertion_sites$position >= annotation$start &
-                                             insertion_sites$position <= annotation$end,
-                                           annotation$feature_type, insertion_sites$feature_type)
-  # add feature phase
-  insertion_sites$feature_phase <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                           insertion_sites$position >= annotation$start &
-                                           insertion_sites$position <= annotation$end,
-                                         annotation$phase, insertion_sites$feature_phase)
-  # Report progress every 100 annotations (untested)
-  if (line %% 100 == 0) {
-    cat("Processed", line, "of", nrow(gff), "annotations (", round(100 * line / nrow(gff), 1), "%)\n")
-  }
-}
-
-rm(annotation, line, gff) # clean up
-
-#### save the plotting data frame at this point as it took a while to make ####
-
-save(insertion_sites, file = "insertion_sites.RData")
-#load("insertion_sites.RData")
-
-#### Draw the plot ####
+#### set user input variables ####
 
 # user input parameters
 BINARY = T # if false plot the insertion site count, if true, plot insertion site location only
 BINARY = F
 
-# first set the region you want to plot
-chr <- "contig_2"
-st <- 1
+# The region you want to plot
+chr <- "NZ_CP009273.1"
+st <- 5000
 en <- 10000
+
+#### prep data frames for plotting ####
+
+# filter data to the region for plotting
 my_region <- filter(insertion_sites, chromosome == chr & position >= st & position <= en)
-
-
-###################
-
-
-
-# # Summarise the genomic coordinates of each feature
-# features <- my_region %>%
-#   filter(!is.na(feature_name)) %>%
-#   group_by(feature_name, feature_ID) %>%
-#   summarise(start = min(position), end = max(position), .groups = "drop")
 
 # Summarise the genomic coordinates of each feature
 features <- my_region %>%
   filter(!is.na(feature_name)) %>%
   group_by(feature_name, feature_ID, feature_type, feature_strand) %>%
   summarise(start = min(position), end = max(position), .groups = "drop")
-
-
-# Set the scale factor for insertion bar heights
-insertion_scale <- 1
 
 # Define arrow dimensions
 arrow_height <- 14
@@ -162,8 +49,8 @@ if (BINARY) {
   fwd_bars <- my_region %>% filter(fwd_insertions > 0) %>% mutate(ymin = 0, ymax = (arrow_height * 0.6) * 3)
   rev_bars <- my_region %>% filter(rev_insertions > 0) %>% mutate(ymin = -(arrow_height * 0.6) * 3, ymax = 0)
 } else {
-  fwd_bars <- my_region %>% mutate(ymin = (arrow_height * 0.6), ymax = (arrow_height * 0.6) + fwd_insertions * insertion_scale)
-  rev_bars <- my_region %>% mutate(ymin = -(arrow_height * 0.6) - rev_insertions * insertion_scale, ymax = -(arrow_height * 0.6))
+  fwd_bars <- my_region %>% mutate(ymin = (arrow_height * 0.6), ymax = (arrow_height * 0.6) + fwd_insertions)
+  rev_bars <- my_region %>% mutate(ymin = -(arrow_height * 0.6) - rev_insertions, ymax = -(arrow_height * 0.6))
 }
 
 # Calculate arrow polygon coordinates for CDS features only
@@ -182,10 +69,10 @@ arrow_polygons <- features %>%
 
 # Prepare rRNA and tRNA triangles
 rna_triangles <- features %>%
-  filter(feature_type %in% c("rRNA", "tRNA")) %>%
+  filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
   mutate(mid = (start + end) / 2,
-         triangle_width = ifelse(feature_type == "rRNA", arrow_height * 0.4, arrow_height * 0.2),
-         triangle_length = ifelse(feature_type == "rRNA", (end - start), (end - start)),
+         triangle_width = ifelse(feature_type == "rRNA", arrow_height * 0.3, ifelse(feature_type == "tRNA", arrow_height * 0.2, arrow_height * 0.15)),
+         triangle_length = (end - start),
          tip = ifelse(feature_strand == "+", end, start),
          base = ifelse(feature_strand == "+", end - triangle_length, start + triangle_length),
          ybase = ifelse(feature_type == "rRNA", triangle_width, triangle_width)) %>%
@@ -201,7 +88,7 @@ ggplot() +
   # Forward insertion bars
   geom_rect(data = fwd_bars,
     aes(xmin = position - ((en - st) /400), xmax = position + ((en - st) /400),
-        ymin = ymin, ymax = ymax), fill = "grey20") +
+        ymin = ymin, ymax = ymax), fill = "grey30") +
   # Reverse insertion bars
   geom_rect(data = rev_bars,
     aes(xmin = position - ((en - st) /400), xmax = position + ((en - st) /400),
@@ -209,14 +96,22 @@ ggplot() +
   # CDS feature arrows
   geom_polygon(data = arrow_polygons,
                aes(x = x, y = y, group = feature_ID), fill = "grey70", colour = "grey70") +
-  # rRNA and tRNA triangles
-  geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
-               aes(x = x, y = y, group = feature_ID), fill = "purple", colour = "black") +
-  geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
-               aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00") +
+  # rRNA, ncRNA and tRNA triangles
+  {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
+                                                               aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
+  {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
+                                                                aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black")} +
+  {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
+                                                               aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00")} +
+  # geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
+  #              aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4") +
+  # geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
+  #              aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black") +
+  # geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
+  #              aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00") +
   # Feature IDs centered inside the arrows
   geom_text(data = features %>% filter(feature_type == "CDS"),
-            aes(x = (start + end) / 2, y = 0, label = feature_ID), size = 3, colour = "black") +
+            aes(x = (start + end) / 2, y = 0, label = feature_name), fontface = 'italic', size = 3, colour = "black") +
     # Axis labels and theme
   labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
   scale_y_continuous(labels = if (BINARY) NULL else abs) +
