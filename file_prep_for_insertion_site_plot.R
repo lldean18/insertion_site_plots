@@ -3,7 +3,7 @@
 ######################################
 
 # install libraries if required
-list.of.packages <- c("tidyverse")
+list.of.packages <- c("tidyverse", "data.table")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
 if(length(new.packages)>0) {install.packages(new.packages)}
 rm(list.of.packages, new.packages)
@@ -62,64 +62,106 @@ rm(genome_positions, insertions)
 #### Process the GFF annotation ####
 
 # remove columns containing the whole contigs as regions
-gff <- gff[gff$feature_type != "region", ]
+gff <- filter(gff, feature_type != "region")
 
 # extract feature names and ID's
-gff$feature_name <- ifelse(grepl("gene=", gff$attributes), sub(".*gene=([^;]+).*", "\\1", gff$attributes), sub(".*Name=([^;]+).*", "\\1", gff$attributes))
-#gff$feature_name <- sub(".*Name=([^;]+).*", "\\1", gff$attributes)
-gff$feature_ID <- sub(".*ID=([^;]+).*", "\\1", gff$attributes)
-# Set the name or ID to NA if no attribute exists
-gff$feature_name[!grepl("Name=", gff$attributes)] <- NA
-gff$feature_ID[!grepl("ID=", gff$attributes)] <- NA
+gff$feature_name <- "Unknown"
+gff$feature_name <- ifelse(grepl("gene=", gff$attributes),
+                           sub(".*gene=([^;]+).*", "\\1", gff$attributes),
+                           ifelse(grepl("Name=", gff$attributes),
+                                  sub(".*Name=([^;]+).*", "\\1", gff$attributes),
+                           sub(".*ID=([^;]+).*", "\\1", gff$attributes)))
+#any(grepl("Unknown", gff$feature_name)) # check if any unknowns remain
 
-# for ecoli needed to remove rows where the source is protein homology because they are all duplicates of genes
+gff$feature_ID <- "Unknown"
+gff$feature_ID <- ifelse(grepl("ID=", gff$attributes),
+                         sub(".*ID=([^;]+).*", "\\1", gff$attributes),
+                         gff$feature_ID)
+#any(grepl("Unknown", gff$feature_ID)) # check if any unknowns remain
 
+# load library
+library(data.table)
 
-# add the feature names and ID's to the insertion sites data frame
-# Initialize new columns
-insertion_sites$feature_name <- NA_character_
-insertion_sites$feature_ID <- NA_character_
-insertion_sites$feature_strand <- NA_character_
-insertion_sites$feature_type <- NA_character_
-insertion_sites$feature_phase <- NA_character_
+# rename columns to match
+names(gff)[names(gff) == "strand"] <- "feature_strand"
+names(gff)[names(gff) == "phase"] <- "feature_phase"
 
-# add the annotation information to the insertion sites data
-for (line in seq_len(nrow(gff))) {
-  annotation <- gff[line, ] # Get the current annotation line
-  # add feature names
-  insertion_sites$feature_name <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                           insertion_sites$position >= annotation$start &
-                                           insertion_sites$position <= annotation$end, annotation$feature_name, insertion_sites$feature_name)
-  # add feature IDs
-  insertion_sites$feature_ID <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                         insertion_sites$position >= annotation$start &
-                                         insertion_sites$position <= annotation$end,
-                                       annotation$feature_ID, insertion_sites$feature_ID)
-  # add feature strand
-  insertion_sites$feature_strand <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                             insertion_sites$position >= annotation$start &
-                                             insertion_sites$position <= annotation$end,
-                                           annotation$strand, insertion_sites$feature_strand)
-  # add feature type
-  insertion_sites$feature_type <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                           insertion_sites$position >= annotation$start &
-                                           insertion_sites$position <= annotation$end,
-                                         annotation$feature_type, insertion_sites$feature_type)
-  # add feature phase
-  insertion_sites$feature_phase <- ifelse(insertion_sites$chromosome == annotation$chromosome &
-                                            insertion_sites$position >= annotation$start &
-                                            insertion_sites$position <= annotation$end,
-                                          annotation$phase, insertion_sites$feature_phase)
-  # Report progress every 100 annotations (untested)
-  if (line %% 100 == 0) {
-    cat("Processed", line, "of", nrow(gff), "annotations (", round(100 * line / nrow(gff), 1), "%)\n")
-  }
-}
+# Convert to data.table
+insertion_sites_dt <- as.data.table(insertion_sites)
+gff_dt <- as.data.table(gff)
 
-rm(annotation, line, gff) # clean up
+# Preserve original row numbers
+insertion_sites_dt[, site_id := .I]
+gff_dt[, annotation_id := .I]
+
+# Represent insertion sites as single-base intervals
+insertion_sites_dt[, `:=`(
+  start = position,
+  end = position
+)]
+
+# Keep the required GFF columns
+gff_dt <- gff_dt[, .(
+  chromosome,
+  start,
+  end,
+  annotation_id,
+  feature_name,
+  feature_ID,
+  feature_strand,
+  feature_type,
+  feature_phase
+)]
+
+# Index the GFF annotations
+setkey(gff_dt, chromosome, start, end)
+
+# Find overlaps between insertion sites and GFF annotations
+overlaps <- foverlaps(
+  insertion_sites_dt,
+  gff_dt,
+  by.x = c("chromosome", "start", "end"),
+  by.y = c("chromosome", "start", "end"),
+  type = "within",
+  nomatch = NA
+)
+
+# Select the last matching annotation for each insertion site
+# Keep all overlapping annotations, preserving NA values
+annotations <- overlaps[
+  !is.na(annotation_id),
+  .(
+    site_id,
+    feature_name,
+    feature_ID,
+    feature_strand,
+    feature_type,
+    feature_phase
+  )
+]
+
+# Join annotations to the original insertion site information
+insertion_sites_annotated <- merge(
+  as.data.table(insertion_sites)[, .(site_id = .I, .SD)],
+  annotations,
+  by = "site_id",
+  all.x = TRUE,
+  sort = FALSE,
+  suffixes = c("", "_annotation")
+)
+
+# Convert back to a data.frame if desired
+insertion_sites_annotated <- as.data.frame(insertion_sites_annotated)
+
+# get rid of the additional string in column names
+insertion_sites_annotated <- insertion_sites_annotated %>% rename_with(~str_remove(., '.SD.'))
+
+# cleanup
+rm(insertion_sites, insertion_sites_dt, gff_dt, gff, overlaps, annotations)
+
 
 #### save the plotting data frame at this point as it took a while to make ####
 
-save(insertion_sites, file = "insertion_sites_ecoli.RData")
-#load("insertion_sites.RData")
+save(insertion_sites_annotated, file = "insertion_sites_ecoli_annotated.RData")
+
 
