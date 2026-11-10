@@ -28,13 +28,19 @@ BINARY = F
 RAINBOW = T
 RAINBOW = F
 
+SEP_FWD_REV = T
+SEP_FWD_REV = F
+
+HIGHLIGHT_GENE = "None"
+HIGHLIGHT_GENE = "argG"
+
 # The region you want to plot
 chr <- "NZ_CP009273.1"
 st <- 3862000
 en <- 3868000
 # trna
-st <- 3313431
-en <- 3315517
+st <- 3310431
+en <- 3318517
 
 # features in ecoli to look at
 #dnaA 3875686	3877089
@@ -65,7 +71,7 @@ both_strands <- any(features$feature_strand == "+", na.rm = TRUE) &&
 
 # Place features just below zero; separate strands only if both are present
 features <- features %>%
-  mutate(y_offset = if (both_strands) {
+  mutate(y_offset = if (both_strands && SEP_FWD_REV) {
     ifelse(feature_strand == "+", -arrow_height * 0.7, -arrow_height * 2.1)
   } else {-arrow_height * 0.7})
 
@@ -113,6 +119,10 @@ arrow_polygons <- features %>%
   )) %>%
   ungroup() %>%
   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
+# add arrow fill colour
+arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
+                                     if (RAINBOW) "grey70" else "lightpink",
+                                     if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
 
 # prepare RNA triangles
 rna_triangles <- features %>%
@@ -128,87 +138,100 @@ rna_triangles <- features %>%
 
 #### draw the plot (with everything in one) ####
 
-# Plot
-ggplot() +
-  # Forward insertion bars
-  geom_rect(data = fwd_bars,
-    aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-        ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
-  # Reverse insertion bars
-  geom_rect(data = rev_bars,
-    aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-        ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
-  # CDS feature arrows
-  geom_polygon(data = arrow_polygons, aes(x = x, y = y, group = feature_ID,
-                                          fill = if (RAINBOW) feature_ID else "grey70"),
-                                          colour = if (RAINBOW) NA else "grey70") +
-  {if (RAINBOW) {
-    scale_fill_manual(values = setNames(grDevices::colorRampPalette(
-          c("yellow", "orange", "red", "purple", "blue")
-        )(length(unique(arrow_polygons$feature_ID))),
-        unique(arrow_polygons$feature_ID)), guide = "none")
-  } else {
-    scale_fill_identity(guide = "none")
-  }} +
-    # rRNA, ncRNA and tRNA triangles
-  {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
-                                                               aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
-  {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
-                                                                aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black")} +
-  {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
-                                                               aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00")} +
-#  # Feature IDs centered inside the arrows
-  geom_text(data = features %>% filter(feature_type == "CDS"),
-            aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
-      # Axis labels and theme
-  labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
-#  scale_y_continuous(labels = if (BINARY) NULL else abs) +
-  theme_classic() +
-  theme(axis.title = element_text(size = 12),
-        plot.title = element_text(size = 14, face = "bold"),
-        axis.text.y = if (BINARY) element_blank() else element_text(),
-        axis.ticks.y = if (BINARY) element_blank() else element_line(),
-        axis.line.y = if (BINARY) element_blank() else element_line())
-
-
+# # Plot
+# ggplot() +
+#   # Forward insertion bars
+#   geom_rect(data = fwd_bars,
+#     aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
+#         ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
+#   # Reverse insertion bars
+#   geom_rect(data = rev_bars,
+#     aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
+#         ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
+#   # CDS feature arrows
+#   geom_polygon(data = arrow_polygons, aes(x = x, y = y, group = feature_ID,
+#                                           fill = if (RAINBOW) feature_ID else "grey70"),
+#                                           colour = if (RAINBOW) NA else "grey70") +
+#   {if (RAINBOW) {
+#     scale_fill_manual(values = setNames(grDevices::colorRampPalette(
+#           c("yellow", "orange", "red", "purple", "blue")
+#         )(length(unique(arrow_polygons$feature_ID))),
+#         unique(arrow_polygons$feature_ID)), guide = "none")
+#   } else {
+#     scale_fill_identity(guide = "none")
+#   }} +
+#     # rRNA, ncRNA and tRNA triangles
+#   {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
+#                                                                aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
+#   {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
+#                                                                 aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black")} +
+#   {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
+#                                                                aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00")} +
+# #  # Feature IDs centered inside the arrows
+#   geom_text(data = features %>% filter(feature_type == "CDS"),
+#             aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
+#       # Axis labels and theme
+#   labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
+# #  scale_y_continuous(labels = if (BINARY) NULL else abs) +
+#   theme_classic() +
+#   theme(axis.title = element_text(size = 12),
+#         plot.title = element_text(size = 14, face = "bold"),
+#         axis.text.y = if (BINARY) element_blank() else element_text(),
+#         axis.ticks.y = if (BINARY) element_blank() else element_line(),
+#         axis.line.y = if (BINARY) element_blank() else element_line())
+# 
+# 
 #### draw the plot with patchwork ####
-
+ 
 p_insertions <- ggplot() +
-  # Forward insertion bars
-  geom_rect(data = fwd_bars,
-            aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-                ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
-  # Reverse insertion bars
-  geom_rect(data = rev_bars,
-            aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-                ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
-  # Axis labels and theme
-  labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
-  scale_y_continuous(labels = if (BINARY) NULL else abs, limits = c(0, NA), expand = expansion(mult = c(0, 0.02))) +
-  theme_classic() +
-  theme(axis.title = element_text(size = 12),
-        plot.title = element_text(size = 14, face = "bold"),
-        axis.text.y = if (BINARY) element_blank() else element_text(),
-        axis.ticks.y = if (BINARY) element_blank() else element_line(),
-        axis.line.y = if (BINARY) element_blank() else element_line(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.title.x = element_blank())
+ # Forward insertion bars
+ geom_rect(data = fwd_bars,
+           aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
+               ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
+#  Reverse insertion bars
+ geom_rect(data = rev_bars,
+           aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
+               ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
+ # Axis labels and theme
+ labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
+ scale_y_continuous(labels = if (BINARY) NULL else abs, limits = c(0, NA), expand = expansion(mult = c(0, 0.02))) +
+ theme_classic() +
+ theme(axis.title = element_text(size = 12),
+       plot.title = element_text(size = 14, face = "bold"),
+       axis.text.y = if (BINARY) element_blank() else element_text(),
+       axis.ticks.y = if (BINARY) element_blank() else element_line(),
+       axis.line.y = if (BINARY) element_blank() else element_line(),
+       axis.text.x = element_blank(),
+       axis.ticks.x = element_blank(),
+       axis.title.x = element_blank(),
+       axis.line.x = element_blank())
 
 
 p_features <- ggplot() +
   # CDS feature arrows
   geom_polygon(data = arrow_polygons, aes(x = x, y = y, group = feature_ID,
-                                          fill = if (RAINBOW) feature_ID else "grey70"),
-               colour = if (RAINBOW) NA else "grey70") +
+                                          fill = fill_colour, colour = fill_colour)) +
+  
   {if (RAINBOW) {
-    scale_fill_manual(values = setNames(grDevices::colorRampPalette(
-      c("yellow", "orange", "red", "purple", "blue")
+    scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
+      c("yellow", "orange1", "red1", "purple1", "lightblue")
     )(length(unique(arrow_polygons$feature_ID))),
-    unique(arrow_polygons$feature_ID)), guide = "none")
+    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "grey70"), guide = "none")
   } else {
     scale_fill_identity(guide = "none")
   }} +
+  
+  {if (RAINBOW) {
+    scale_colour_manual(values = c(setNames(grDevices::colorRampPalette(
+      c("yellow", "orange1", "red1", "purple1", "lightblue")
+    )(length(unique(arrow_polygons$feature_ID))),
+    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "grey70"), guide = "none")
+  } else {
+    scale_colour_identity(guide = "none")
+  }} +
+  
+#  {if (!RAINBOW) scale_colour_identity(guide = "none")} +
+  
   # rRNA, ncRNA and tRNA triangles
   {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
                                                                aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
@@ -228,27 +251,12 @@ p_features <- ggplot() +
         plot.title = element_text(size = 14, face = "bold"),
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.line.y = element_blank())
+        axis.line.y = element_blank(),
+        legend.position = "None")
 p_features
   
 # plot the two together
 p_insertions / p_features +
   plot_layout(heights = c(3, 1))
-  
-  
-    # Move your existing feature geom_polygon layers here
-  # Move your existing RNA triangle layers here
-  # Move your existing feature-label layers here
-  scale_y_continuous(
-    limits = c(-arrow_height * 2.8, 0),
-    expand = expansion(mult = 0)
-  ) +
-  scale_x_continuous(
-    limits = c(st, en),
-    expand = expansion(mult = 0)
-  ) +
-  theme_void() +
-  theme(
-    plot.margin = margin(t = 0, r = 5.5, b = 5.5, l = 5.5)
-  ) +
-  labs(x = "Genomic position (bp)")
+
+
