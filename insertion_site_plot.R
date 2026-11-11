@@ -41,6 +41,12 @@ en <- 3868000
 # trna
 st <- 3310431
 en <- 3318517
+# rRNA
+st <- 4153587
+en <- 4159587
+# ncRNA
+st <- 775139
+en <- 779139
 
 # features in ecoli to look at
 #dnaA 3875686	3877089
@@ -90,7 +96,7 @@ if (BINARY) {
     mutate(ymin = feature_top, ymax = feature_top + (arrow_height * 0.6) * 3)
   rev_bars <- my_region %>%
     filter(rev_insertions > 0) %>%
-    mutate(ymin = feature_bottom - (arrow_height * 0.6) * 3, ymax = feature_bottom)
+    mutate(ymin = feature_top, ymax = feature_top + (arrow_height * 0.6) * 3)
 } else {
   fwd_bars <- my_region %>%
     mutate(ymin = feature_top, ymax = feature_top + fwd_insertions)
@@ -205,6 +211,7 @@ p_insertions <- ggplot() +
        axis.ticks.x = element_blank(),
        axis.title.x = element_blank(),
        axis.line.x = element_blank())
+p_insertions
 
 
 p_features <- ggplot() +
@@ -253,7 +260,7 @@ p_features <- ggplot() +
         axis.ticks.y = element_blank(),
         axis.line.y = element_blank(),
         legend.position = "None")
-p_features
+#p_features
   
 # plot the two together
 p_insertions / p_features +
