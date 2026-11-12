@@ -50,6 +50,9 @@ en <- 4159587
 # ncRNA
 st <- 775139
 en <- 779139
+# pseudogene
+st <- 19000
+en <- 21000
 
 # features in ecoli to look at
 #dnaA 3875686	3877089
@@ -73,6 +76,13 @@ features <- my_region %>%
   summarise(start = min(position), end = max(position), .groups = "drop") %>%
   mutate(length = end - start, body_height = arrow_height * 0.6,
          head_height = arrow_height, head_length = length * arrow_head_length)
+
+# ensure that feature ID is unique
+n <- nrow(filter(features, duplicated(features$feature_ID)))
+features$feature_ID <- ifelse(duplicated(features$feature_ID),
+                              paste0(features$feature_ID, "_", seq_along(n)),
+                              features$feature_ID)
+rm(n)
 
 # Determine whether features occur on both strands
 both_strands <- any(features$feature_strand == "+", na.rm = TRUE) &&
@@ -99,12 +109,39 @@ if (BINARY) {
     mutate(ymin = 0, ymax = 0 + rev_insertions)
 }
 
+# # Calculate arrow polygon coordinates for CDS features
+# arrow_polygons <- features %>%
+#   filter(feature_type == "CDS") %>%
+#   rowwise() %>%
+#   do(data.frame(
+#     feature_name = .$feature_name, feature_ID = .$feature_ID,
+#     x = if (.$feature_strand == "+") {
+#       c(.$start, .$end - .$head_length, .$end - .$head_length,
+#         .$end, .$end - .$head_length, .$end - .$head_length, .$start)
+#     } else {
+#       c(.$end, .$start + .$head_length, .$start + .$head_length,
+#         .$start, .$start + .$head_length, .$start + .$head_length, .$end)
+#     },
+#     y = c(.$y_offset - .$body_height, .$y_offset - .$body_height,
+#           .$y_offset - .$head_height, .$y_offset,
+#           .$y_offset + .$head_height, .$y_offset + .$body_height,
+#           .$y_offset + .$body_height)
+#   )) %>%
+#   ungroup() %>%
+#   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
+# # add arrow fill colour
+# arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
+#                                      if (RAINBOW) "grey70" else "lightpink",
+#                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
+
+# new with pseudogenes
 # Calculate arrow polygon coordinates for CDS features
 arrow_polygons <- features %>%
-  filter(feature_type == "CDS") %>%
+  filter(feature_type == "CDS" | feature_type == "pseudogene") %>%
   rowwise() %>%
-  do(data.frame(
-    feature_name = .$feature_name, feature_ID = .$feature_ID,
+  do(data.frame(feature_name = .$feature_name,
+                feature_ID = .$feature_ID,
+                feature_type = .$feature_type,
     x = if (.$feature_strand == "+") {
       c(.$start, .$end - .$head_length, .$end - .$head_length,
         .$end, .$end - .$head_length, .$end - .$head_length, .$start)
@@ -119,10 +156,12 @@ arrow_polygons <- features %>%
   )) %>%
   ungroup() %>%
   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
+
 # add arrow fill colour
 arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
                                      if (RAINBOW) "grey70" else "lightpink",
                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
+
 
 # # prepare RNA triangles
 rna_triangles <- features %>%
@@ -188,7 +227,7 @@ p_features <- ggplot() +
   {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
                                                                 aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black")} +
   {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
-                                                               aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00")} +
+                                                               aes(x = x, y = y, group = feature_ID), fill = "green3", colour = "green3")} +
   #  # Feature IDs centered inside the arrows
   geom_text(data = features %>% filter(feature_type == "CDS"),
             aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
