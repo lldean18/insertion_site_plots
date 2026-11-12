@@ -36,6 +36,7 @@ SEP_FWD_REV = F
 HIGHLIGHT_GENE = "None"
 HIGHLIGHT_GENE = "argG"
 HIGHLIGHT_GENE = "nadA"
+HIGHLIGHT_GENE = "nhar"
 
 MAX_PLOT_HEIGHT = 10
 
@@ -96,6 +97,11 @@ features <- features %>%
     ifelse(feature_strand == "+", -arrow_height * 0.7, -arrow_height * 2.1)
   } else {-arrow_height * 0.7})
 
+# add feature fill colour
+features$fill_colour <- ifelse(tolower(features$feature_name) == tolower(HIGHLIGHT_GENE),
+                                     if (RAINBOW) "grey70" else "lightpink",
+                                     if (RAINBOW) as.character(features$feature_ID) else "grey70")
+
 # Prepare forward and reverse insertion bars
 if (BINARY) {
   fwd_bars <- my_region %>%
@@ -119,6 +125,7 @@ arrow_polygons <- features %>%
                 feature_ID = .$feature_ID,
                 feature_type = .$feature_type,
                 feature_strand = .$feature_strand,
+                fill_colour = .$fill_colour,
     x = if (.$feature_strand == "+") {
       c(.$start, .$end - .$head_length, .$end - .$head_length,
         .$end, .$end - .$head_length, .$end - .$head_length, .$start)
@@ -134,10 +141,10 @@ arrow_polygons <- features %>%
   ungroup() %>%
   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
 
-# add arrow fill colour
-arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
-                                     if (RAINBOW) "grey70" else "lightpink",
-                                     if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
+# # add arrow fill colour
+# arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
+#                                      if (RAINBOW) "grey70" else "lightpink",
+#                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
 
 # add calculation for body lines for pseudogenes
 body_lines <- arrow_polygons %>%
@@ -230,9 +237,13 @@ p_features <- ggplot() +
                                                                 aes(x = x, y = y, group = feature_ID), fill = "grey30", colour = "grey30")} +
   {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
                                                                aes(x = x, y = y, group = feature_ID), fill = "grey30", colour = "grey30")} +
-  #  # Feature IDs centered inside the arrows
+  # CDS feature IDs centered inside the arrows
   geom_text(data = features %>% filter(feature_type == "CDS"),
             aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
+  # pseudogene feature IDs with box behind
+  geom_label(data = features %>% filter(feature_type == "pseudogene"), 
+             aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
+             size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
   # Axis labels and theme
   labs(x = "Genomic position (bp)", y = NULL) +
 #  scale_y_continuous(labels = NULL, limits = c(-arrow_height * 2.8, 0), expand = expansion(mult = 0)) +
