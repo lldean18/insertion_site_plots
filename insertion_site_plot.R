@@ -125,21 +125,10 @@ arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tol
                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
 
 # # prepare RNA triangles
-# rna_triangles <- features %>%
-#   filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
-#   mutate(triangle_width = ifelse(feature_type == "rRNA", arrow_height * 0.3,
-#       ifelse(feature_type == "tRNA", arrow_height * 0.2, arrow_height * 0.15)),
-#     triangle_length = end - start, tip = ifelse(feature_strand == "+", end, start),
-#     base = ifelse(feature_strand == "+", end - triangle_length, start + triangle_length)) %>%
-#   rowwise() %>%
-#   do(data.frame(feature_ID = .$feature_ID, feature_type = .$feature_type, x = c(.$base, .$tip, .$base),
-#                 y = c(.$y_offset - .$triangle_width, .$y_offset, .$y_offset + .$triangle_width))) %>%
-#   ungroup()
-
-# prepare RNA triangles NEW 2nd try
 rna_triangles <- features %>%
   filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
-  mutate(triangle_width = arrow_height, tip = ifelse(feature_strand == "+", end, start),
+  mutate(triangle_width = body_height,
+         tip = ifelse(feature_strand == "+", end, start),
          base = ifelse(feature_strand == "+", start, end)) %>%
   rowwise() %>%
   reframe(feature_ID = feature_ID, feature_type = feature_type, x = c(base, base, tip),
