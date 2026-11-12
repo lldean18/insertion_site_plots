@@ -33,6 +33,9 @@ SEP_FWD_REV = F
 
 HIGHLIGHT_GENE = "None"
 HIGHLIGHT_GENE = "argG"
+HIGHLIGHT_GENE = "nadA"
+
+MAX_PLOT_HEIGHT = 10
 
 # The region you want to plot
 chr <- "NZ_CP009273.1"
@@ -81,28 +84,19 @@ features <- features %>%
     ifelse(feature_strand == "+", -arrow_height * 0.7, -arrow_height * 2.1)
   } else {-arrow_height * 0.7})
 
-# Determine the vertical extent of the feature arrows
-if (BINARY) {
-  feature_top <- max(features$y_offset + features$head_height, na.rm = TRUE)
-  feature_bottom <- min(features$y_offset - features$head_height, na.rm = TRUE)
-} else {
-feature_top <- 0
-}
-
 # Prepare forward and reverse insertion bars
 if (BINARY) {
   fwd_bars <- my_region %>%
     filter(fwd_insertions > 0) %>%
-    mutate(ymin = feature_top, ymax = feature_top + (arrow_height * 0.6) * 3)
+    mutate(ymin = 0, ymax = 10)
   rev_bars <- my_region %>%
     filter(rev_insertions > 0) %>%
-    mutate(ymin = feature_top, ymax = feature_top + (arrow_height * 0.6) * 3)
+    mutate(ymin = 0, ymax = 10)
 } else {
   fwd_bars <- my_region %>%
-    mutate(ymin = feature_top, ymax = feature_top + fwd_insertions)
+    mutate(ymin = 0, ymax = 0 + fwd_insertions)
   rev_bars <- my_region %>%
-#    mutate(ymin = feature_bottom - rev_insertions, ymax = feature_bottom)
-    mutate(ymin = feature_top, ymax = feature_top + rev_insertions)
+    mutate(ymin = 0, ymax = 0 + rev_insertions)
 }
 
 # Calculate arrow polygon coordinates for CDS features
@@ -130,63 +124,28 @@ arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tol
                                      if (RAINBOW) "grey70" else "lightpink",
                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
 
-# prepare RNA triangles
+# # prepare RNA triangles
+# rna_triangles <- features %>%
+#   filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
+#   mutate(triangle_width = ifelse(feature_type == "rRNA", arrow_height * 0.3,
+#       ifelse(feature_type == "tRNA", arrow_height * 0.2, arrow_height * 0.15)),
+#     triangle_length = end - start, tip = ifelse(feature_strand == "+", end, start),
+#     base = ifelse(feature_strand == "+", end - triangle_length, start + triangle_length)) %>%
+#   rowwise() %>%
+#   do(data.frame(feature_ID = .$feature_ID, feature_type = .$feature_type, x = c(.$base, .$tip, .$base),
+#                 y = c(.$y_offset - .$triangle_width, .$y_offset, .$y_offset + .$triangle_width))) %>%
+#   ungroup()
+
+# prepare RNA triangles NEW 2nd try
 rna_triangles <- features %>%
   filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
-  mutate(triangle_width = ifelse(feature_type == "rRNA", arrow_height * 0.3,
-      ifelse(feature_type == "tRNA", arrow_height * 0.2, arrow_height * 0.15)),
-    triangle_length = end - start, tip = ifelse(feature_strand == "+", end, start),
-    base = ifelse(feature_strand == "+", end - triangle_length, start + triangle_length)) %>%
+  mutate(triangle_width = arrow_height, tip = ifelse(feature_strand == "+", end, start),
+         base = ifelse(feature_strand == "+", start, end)) %>%
   rowwise() %>%
-  do(data.frame(feature_ID = .$feature_ID, feature_type = .$feature_type, x = c(.$base, .$tip, .$base),
-                y = c(.$y_offset - .$triangle_width, .$y_offset, .$y_offset + .$triangle_width))) %>%
+  reframe(feature_ID = feature_ID, feature_type = feature_type, x = c(base, base, tip),
+          y = c(y_offset + triangle_width, y_offset - triangle_width, y_offset + triangle_width)) %>%
   ungroup()
 
-#### draw the plot (with everything in one) ####
-
-# # Plot
-# ggplot() +
-#   # Forward insertion bars
-#   geom_rect(data = fwd_bars,
-#     aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-#         ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
-#   # Reverse insertion bars
-#   geom_rect(data = rev_bars,
-#     aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-#         ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
-#   # CDS feature arrows
-#   geom_polygon(data = arrow_polygons, aes(x = x, y = y, group = feature_ID,
-#                                           fill = if (RAINBOW) feature_ID else "grey70"),
-#                                           colour = if (RAINBOW) NA else "grey70") +
-#   {if (RAINBOW) {
-#     scale_fill_manual(values = setNames(grDevices::colorRampPalette(
-#           c("yellow", "orange", "red", "purple", "blue")
-#         )(length(unique(arrow_polygons$feature_ID))),
-#         unique(arrow_polygons$feature_ID)), guide = "none")
-#   } else {
-#     scale_fill_identity(guide = "none")
-#   }} +
-#     # rRNA, ncRNA and tRNA triangles
-#   {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
-#                                                                aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
-#   {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "ncRNA"),
-#                                                                 aes(x = x, y = y, group = feature_ID), fill = "black", colour = "black")} +
-#   {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "tRNA"),
-#                                                                aes(x = x, y = y, group = feature_ID), fill = "#00FF00", colour = "#00FF00")} +
-# #  # Feature IDs centered inside the arrows
-#   geom_text(data = features %>% filter(feature_type == "CDS"),
-#             aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
-#       # Axis labels and theme
-#   labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
-# #  scale_y_continuous(labels = if (BINARY) NULL else abs) +
-#   theme_classic() +
-#   theme(axis.title = element_text(size = 12),
-#         plot.title = element_text(size = 14, face = "bold"),
-#         axis.text.y = if (BINARY) element_blank() else element_text(),
-#         axis.ticks.y = if (BINARY) element_blank() else element_line(),
-#         axis.line.y = if (BINARY) element_blank() else element_line())
-# 
-# 
 #### draw the plot with patchwork ####
  
 p_insertions <- ggplot() +
@@ -199,18 +158,15 @@ p_insertions <- ggplot() +
            aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
                ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
  # Axis labels and theme
- labs(x = "Genomic position (bp)", y = if (BINARY) NULL else "Insertion count") +
+ labs(x = "Genomic position (bp)", y = if (BINARY) "Insertions" else "Insertion count") +
+  {if (exists("MAX_PLOT_HEIGHT")) coord_cartesian(ylim = c(0, MAX_PLOT_HEIGHT))} +
  scale_y_continuous(labels = if (BINARY) NULL else abs, limits = c(0, NA), expand = expansion(mult = c(0, 0.02))) +
  theme_classic() +
  theme(axis.title = element_text(size = 12),
        plot.title = element_text(size = 14, face = "bold"),
        axis.text.y = if (BINARY) element_blank() else element_text(),
        axis.ticks.y = if (BINARY) element_blank() else element_line(),
-       axis.line.y = if (BINARY) element_blank() else element_line(),
-       axis.text.x = element_blank(),
-       axis.ticks.x = element_blank(),
-       axis.title.x = element_blank(),
-       axis.line.x = element_blank())
+       axis.line.y = if (BINARY) element_blank() else element_line())
 p_insertions
 
 
@@ -237,8 +193,6 @@ p_features <- ggplot() +
     scale_colour_identity(guide = "none")
   }} +
   
-#  {if (!RAINBOW) scale_colour_identity(guide = "none")} +
-  
   # rRNA, ncRNA and tRNA triangles
   {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = filter(rna_triangles, feature_type == "rRNA"),
                                                                aes(x = x, y = y, group = feature_ID), fill = "purple4", colour = "purple4")} +
@@ -259,8 +213,12 @@ p_features <- ggplot() +
         axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         axis.line.y = element_blank(),
-        legend.position = "None")
-#p_features
+        legend.position = "None",
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.line.x = element_blank())
+p_features
   
 # plot the two together
 p_insertions / p_features +
