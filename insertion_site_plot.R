@@ -200,6 +200,9 @@ p_insertions <- ggplot() +
        plot.margin = margin(0, 0, 0, 0))
 p_insertions
 
+
+
+
 # FEATURES PLOT
 p_features <- ggplot() +
   # CDS feature arrows
@@ -208,7 +211,7 @@ p_features <- ggplot() +
   # Pseudogene feature arrows
   geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "pseudogene"),
                        aes(x = x, y = y, group = feature_ID, fill = fill_colour),
-                       pattern = "stripe", pattern_angle = 45, pattern_spacing = 0.02,
+                       pattern = "stripe", pattern_angle = 45, pattern_spacing = 0.05,
                        pattern_density = 0.05, colour = "black", pattern_colour = "grey40") +
   # crosses across pseudogene feature arrows
     geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_min, yend = y_max),
