@@ -200,14 +200,22 @@ p_insertions <- ggplot() +
        plot.margin = margin(0, 0, 0, 0))
 p_insertions
 
-
-
+#possible rainbow colours
+# "yellow", "orange1", "red1", "purple1", "lightblue"
+# "#E9C46A", "#F4A261", "#E76F51", "#9B5DE5", "#72B0D9"
+#"goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3"
 
 # FEATURES PLOT
 p_features <- ggplot() +
   # CDS feature arrows
   geom_polygon(data = filter(arrow_polygons, feature_type == "CDS"),
                aes(x = x, y = y, group = feature_ID, fill = fill_colour, colour = fill_colour)) +
+  # highlighted gene feature arrow
+  geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "CDS" &
+                                       tolower(feature_name) == tolower(HIGHLIGHT_GENE)),
+                       aes(x=x, y=y, group = feature_ID, fill = "grey"),
+                       pattern = "gradient", pattern_orientation = "radial",
+                       pattern_fill = "grey", pattern_fill2 = "black") +
   # Pseudogene feature arrows
   geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "pseudogene"),
                        aes(x = x, y = y, group = feature_ID, fill = fill_colour),
@@ -222,17 +230,18 @@ p_features <- ggplot() +
   # scale for arrow fill
   {if (RAINBOW) {
     scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
-      c("yellow", "orange1", "red1", "purple1", "lightblue")
+      c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
     )(length(unique(arrow_polygons$feature_ID))),
     unique(as.character(arrow_polygons$feature_ID))), "grey70" = "grey70"), guide = "none")
   } else {
     scale_fill_identity(guide = "none")
   }} +
+  # scale for arrow outline
   {if (RAINBOW) {
     scale_colour_manual(values = c(setNames(grDevices::colorRampPalette(
-      c("yellow", "orange1", "red1", "purple1", "lightblue")
+      c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
     )(length(unique(arrow_polygons$feature_ID))),
-    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "grey70"), guide = "none")
+    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "black"), guide = "none")
   } else {
     scale_colour_identity(guide = "none")
   }} +
@@ -247,6 +256,10 @@ p_features <- ggplot() +
   # CDS feature IDs centered inside the arrows
   geom_text(data = features %>% filter(feature_type == "CDS"),
             aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
+  # highlighted gene label with box behind
+  geom_label(data = features %>% filter(feature_type == "CDS" & tolower(feature_name) == tolower(HIGHLIGHT_GENE)), 
+             aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
+             size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
   # pseudogene feature IDs with box behind
   geom_label(data = features %>% filter(feature_type == "pseudogene"), 
              aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
