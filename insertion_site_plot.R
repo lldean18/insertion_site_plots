@@ -193,7 +193,8 @@ p_insertions <- ggplot() +
        plot.title = element_text(size = 14, face = "bold"),
        axis.text.y = if (BINARY) element_blank() else element_text(),
        axis.ticks.y = if (BINARY) element_blank() else element_line(),
-       axis.line.y = if (BINARY) element_blank() else element_line())
+       axis.line.y = if (BINARY) element_blank() else element_line(),
+       plot.margin = margin(0, 0, 0, 0))
 p_insertions
 
 # FEATURES PLOT
@@ -258,7 +259,8 @@ p_features <- ggplot() +
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank(),
         axis.title.x = element_blank(),
-        axis.line.x = element_blank())  #+
+        axis.line.x = element_blank(),
+        plot.margin = margin(0, 0, 0, 0))  #+
   #scale_pattern_density_manual(values = rep(0.1, length(unique(arrow_polygons$feature_ID))))
 p_features
   
