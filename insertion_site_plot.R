@@ -87,6 +87,9 @@ features$feature_ID <- ifelse(duplicated(features$feature_ID),
                               features$feature_ID)
 rm(n)
 
+# remove the "cds-" string from the beginning of feature names
+features$feature_name <- sub("cds-", "", features$feature_name)
+
 # Determine whether features occur on both strands
 both_strands <- any(features$feature_strand == "+", na.rm = TRUE) &&
   any(features$feature_strand == "-", na.rm = TRUE)
