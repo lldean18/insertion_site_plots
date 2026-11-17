@@ -56,7 +56,7 @@ en <- 779139
 # pseudogene
 st <- 19000
 en <- 21000
-
+en <- 25000
 # features in ecoli to look at
 #dnaA 3875686	3877089
 #st <- 3872000
@@ -175,6 +175,14 @@ rna_triangles <- features %>%
           y = c(y_offset + triangle_width, y_offset - triangle_width, y_offset + triangle_width)) %>%
   ungroup()
 
+# set the feature colour order for rainbow arrows
+feature_order <- arrow_polygons %>%
+  distinct(feature_ID, x) %>%   # use your genomic start column
+  arrange(x) %>%
+  pull(feature_ID) %>%
+  unique() %>%
+  as.character()
+
 #### draw the plot with patchwork ####
 
 # INSERTIONS PLOT
@@ -231,8 +239,8 @@ p_features <- ggplot() +
   {if (RAINBOW) {
     scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
       c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
-    )(length(unique(arrow_polygons$feature_ID))),
-    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "grey70"), guide = "none")
+    )(length(feature_order)),
+    feature_order), "grey70" = "grey70"), guide = "none")
   } else {
     scale_fill_identity(guide = "none")
   }} +
@@ -240,8 +248,8 @@ p_features <- ggplot() +
   {if (RAINBOW) {
     scale_colour_manual(values = c(setNames(grDevices::colorRampPalette(
       c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
-    )(length(unique(arrow_polygons$feature_ID))),
-    unique(as.character(arrow_polygons$feature_ID))), "grey70" = "black"), guide = "none")
+    )(length(feature_order)),
+    feature_order), "grey70" = "black"), guide = "none")
   } else {
     scale_colour_identity(guide = "none")
   }} +
