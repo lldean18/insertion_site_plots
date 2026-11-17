@@ -37,6 +37,7 @@ HIGHLIGHT_GENE = "None"
 HIGHLIGHT_GENE = "argG"
 HIGHLIGHT_GENE = "nadA"
 HIGHLIGHT_GENE = "nhar"
+HIGHLIGHT_GENE = "dgot"
 
 MAX_PLOT_HEIGHT = 10
 
@@ -144,11 +145,6 @@ arrow_polygons <- features %>%
   ungroup() %>%
   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
 
-# # add arrow fill colour
-# arrow_polygons$fill_colour <- ifelse(tolower(arrow_polygons$feature_name) == tolower(HIGHLIGHT_GENE),
-#                                      if (RAINBOW) "grey70" else "lightpink",
-#                                      if (RAINBOW) as.character(arrow_polygons$feature_ID) else "grey70")
-
 # add calculation for body lines for pseudogenes
 body_lines <- arrow_polygons %>%
   filter(feature_type == "pseudogene") %>%
@@ -177,7 +173,7 @@ rna_triangles <- features %>%
 
 # set the feature colour order for rainbow arrows
 feature_order <- arrow_polygons %>%
-  distinct(feature_ID, x) %>%   # use your genomic start column
+  distinct(feature_ID, x) %>%
   arrange(x) %>%
   pull(feature_ID) %>%
   unique() %>%
