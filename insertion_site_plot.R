@@ -41,6 +41,10 @@ HIGHLIGHT_GENE = "dgot"
 
 MAX_PLOT_HEIGHT = 10
 
+# set the dimensions of the output plot in cm
+PLOT_HEIGHT = 10
+PLOT_WIDTH = 30
+
 # The region you want to plot
 chr <- "NZ_CP009273.1"
 st <- 3862000
@@ -270,7 +274,6 @@ p_features <- ggplot() +
              size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
   # Axis labels and theme
   labs(x = "Genomic position (bp)", y = NULL) +
-#  scale_y_continuous(labels = NULL, limits = c(-arrow_height * 2.8, 0), expand = expansion(mult = 0)) +
   scale_x_continuous(limits = c(st, en), expand = expansion(mult = 0)) +
   theme_classic() +
   theme(axis.title = element_text(size = 12),
@@ -283,12 +286,12 @@ p_features <- ggplot() +
         axis.ticks.x = element_blank(),
         axis.title.x = element_blank(),
         axis.line.x = element_blank(),
-        plot.margin = margin(0, 0, 0, 0))  #+
-  #scale_pattern_density_manual(values = rep(0.1, length(unique(arrow_polygons$feature_ID))))
-p_features
+        plot.margin = margin(0, 0, 0, 0))
+#p_features
   
 # plot the two together
 p_insertions / p_features +
   plot_layout(heights = c(3, 1))
 
-
+# save the plot
+ggsave("insertion_site_plot.pdf", device = "pdf", units = "cm", height = PLOT_HEIGHT, width = PLOT_WIDTH)
