@@ -27,6 +27,9 @@ rm(insertion_sites_annotated)
 BINARY = T # if false plot the insertion site count, if true, plot insertion site location only
 BINARY = F
 
+FWD_BAR_COLOUR = "grey30"
+REV_BAR_COLOUR = "deeppink"
+
 RAINBOW = T
 RAINBOW = F
 
@@ -150,7 +153,8 @@ arrow_polygons <- features %>%
   mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
 
 # add calculation for body lines for pseudogenes
-body_lines <- arrow_polygons %>%
+body_lines <- if (nrow(filter(arrow_polygons, feature_type == "pseudogene")) > 0 ) {
+  arrow_polygons %>%
   filter(feature_type == "pseudogene") %>%
   group_by(feature_ID) %>%  # if feature_ID groups are intended
   summarise(
@@ -163,6 +167,7 @@ body_lines <- arrow_polygons %>%
     y_max = max(y[y != max(y)]),
     y_min = min(y[y != min(y)]),
     .groups = "drop")
+}
 
 # # prepare RNA triangles
 rna_triangles <- features %>%
@@ -190,11 +195,11 @@ p_insertions <- ggplot() +
  # Forward insertion bars
  geom_rect(data = fwd_bars,
            aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-               ymin = ymin, ymax = ymax), fill = "grey30", alpha = 0.5) +
+               ymin = ymin, ymax = ymax), fill = FWD_BAR_COLOUR, alpha = 0.5) +
 #  Reverse insertion bars
  geom_rect(data = rev_bars,
            aes(xmin = position - ((en - st) /1000), xmax = position + ((en - st) /1000),
-               ymin = ymin, ymax = ymax), fill = "deeppink", alpha = 0.5) +
+               ymin = ymin, ymax = ymax), fill = REV_BAR_COLOUR, alpha = 0.5) +
  # Axis labels and theme
  labs(x = "Genomic position (bp)", y = if (BINARY) "Insertions" else "Insertion count") +
   {if (exists("MAX_PLOT_HEIGHT")) coord_cartesian(ylim = c(0, MAX_PLOT_HEIGHT))} +
@@ -218,23 +223,26 @@ p_features <- ggplot() +
   # CDS feature arrows
   geom_polygon(data = filter(arrow_polygons, feature_type == "CDS"),
                aes(x = x, y = y, group = feature_ID, fill = fill_colour, colour = fill_colour)) +
-  # highlighted gene feature arrow
-  geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "CDS" &
-                                       tolower(feature_name) == tolower(HIGHLIGHT_GENE)),
-                       aes(x=x, y=y, group = feature_ID, fill = "grey"),
-                       pattern = "gradient", pattern_orientation = "radial",
-                       pattern_fill = "grey", pattern_fill2 = "black") +
+  # highlighted gene feature arrow if RAINBOW
+  {if (RAINBOW) {
+    geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "CDS" &
+                                         tolower(feature_name) == tolower(HIGHLIGHT_GENE)),
+                         aes(x=x, y=y, group = feature_ID, fill = "grey"),
+                         pattern = "gradient", pattern_orientation = "radial",
+                         pattern_fill = "grey", pattern_fill2 = "black")    
+  }} +
   # Pseudogene feature arrows
   geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "pseudogene"),
                        aes(x = x, y = y, group = feature_ID, fill = fill_colour),
                        pattern = "stripe", pattern_angle = 45, pattern_spacing = 0.05,
                        pattern_density = 0.05, colour = "black", pattern_colour = "grey40") +
   # crosses across pseudogene feature arrows
+  {if (!is.null(body_lines)) {
     geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_min, yend = y_max),
-    inherit.aes = FALSE, colour = "black") +
-  geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_max, yend = y_min),
-    inherit.aes = FALSE, colour = "black") +
-
+                 inherit.aes = FALSE, colour = "black") +
+    geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_max, yend = y_min),
+                   inherit.aes = FALSE, colour = "black")
+  }} +
   # scale for arrow fill
   {if (RAINBOW) {
     scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
@@ -287,7 +295,7 @@ p_features <- ggplot() +
         axis.title.x = element_blank(),
         axis.line.x = element_blank(),
         plot.margin = margin(0, 0, 0, 0))
-#p_features
+p_features
   
 # plot the two together
 p_insertions / p_features +
