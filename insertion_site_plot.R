@@ -27,7 +27,7 @@ rm(insertion_sites_annotated)
 BINARY = T # if false plot the insertion site count, if true, plot insertion site location only
 BINARY = F
 
-FWD_BAR_COLOUR = "grey30"
+FWD_BAR_COLOUR = "blue3"
 REV_BAR_COLOUR = "deeppink"
 
 RAINBOW = T
@@ -224,25 +224,24 @@ p_features <- ggplot() +
   geom_polygon(data = filter(arrow_polygons, feature_type == "CDS"),
                aes(x = x, y = y, group = feature_ID, fill = fill_colour, colour = fill_colour)) +
   # highlighted gene feature arrow if RAINBOW
-  {if (RAINBOW) {
+  {if (RAINBOW)
     geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "CDS" &
                                          tolower(feature_name) == tolower(HIGHLIGHT_GENE)),
                          aes(x=x, y=y, group = feature_ID, fill = "grey"),
                          pattern = "gradient", pattern_orientation = "radial",
-                         pattern_fill = "grey", pattern_fill2 = "black")    
-  }} +
+                         pattern_fill = "grey", pattern_fill2 = "black") } +
   # Pseudogene feature arrows
   geom_polygon_pattern(data = filter(arrow_polygons, feature_type == "pseudogene"),
                        aes(x = x, y = y, group = feature_ID, fill = fill_colour),
                        pattern = "stripe", pattern_angle = 45, pattern_spacing = 0.05,
                        pattern_density = 0.05, colour = "black", pattern_colour = "grey40") +
   # crosses across pseudogene feature arrows
-  {if (!is.null(body_lines)) {
+  {if (!is.null(body_lines))
     geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_min, yend = y_max),
-                 inherit.aes = FALSE, colour = "black") +
+                 inherit.aes = FALSE, colour = "black") } +
+  {if (!is.null(body_lines))
     geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_max, yend = y_min),
-                   inherit.aes = FALSE, colour = "black")
-  }} +
+                   inherit.aes = FALSE, colour = "black")} +
   # scale for arrow fill
   {if (RAINBOW) {
     scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
@@ -302,4 +301,4 @@ p_insertions / p_features +
   plot_layout(heights = c(3, 1))
 
 # save the plot
-ggsave("insertion_site_plot.pdf", device = "pdf", units = "cm", height = PLOT_HEIGHT, width = PLOT_WIDTH)
+ggsave("insertion_site_plot_MAX_PLOT_HEIGHT10.pdf", device = "pdf", units = "cm", height = PLOT_HEIGHT, width = PLOT_WIDTH)
