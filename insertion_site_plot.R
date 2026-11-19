@@ -83,7 +83,7 @@ arrow_height <- 14
 arrow_head_length <- 0.2  # Fraction of feature length
 arrow_head_height <- 1.3   # Relative to arrow half-height
 
-# # Summarise the genomic coordinates of each feature
+# Summarise the genomic coordinates of each feature
 features <- my_region %>%
   group_by(feature_name, feature_ID, feature_type, feature_strand, feature_phase) %>%
   summarise(start = min(position), end = max(position), .groups = "drop") %>%
