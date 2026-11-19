@@ -22,7 +22,7 @@ ui <- page_sidebar(
                     radioButtons(
                       inputId = "BINARY",
                       label = "Insertion bar display:",
-                      choices = c("red", "blue")
+                      choices = c("Scaled" = F, "Binary" = T)
                       ),
                     numericInput(
                       "MAX_PLOT_HEIGHT",
@@ -53,20 +53,22 @@ ui <- page_sidebar(
                                 choices = list("Choice 1" = 1, "Choice 2" = 2, "Choice 3" = 3),
                                 selected = 1
                     )),
-  card(
-    card_header("Upload your genome assembly here:"),
-    fileInput("fasta_file", label = "must be in fasta format (.fa .fasta .fna)"),
-    height = "600px"
+  layout_columns(fill = F,
+    card(
+      card_header("Genome assembly upload:"),
+      fileInput("fasta_file", label = "must be in fasta format (.fa .fasta .fna)")#,
+      #height = "200px"
     ),
-  card(
-    card_header("Upload your annotation file here:"),
-    fileInput("gff_file", label = "must be in gff format (.gff)"),
-    height = "600px"
+    card(
+      card_header("Annotation file upload:"),
+      fileInput("gff_file", label = "must be in gff format (.gff)")#,
+      #height = "200px"
     ),
-  card(
-    card_header("Upload your insertion site data here:"),
-    fileInput("insertions_file", label = "the .insert_site_plot.gz file ouput from bacteria_tradis"),
-    height = "700px"
+    card(
+      card_header("Insertion site data upload:"),
+      fileInput("insertions_file", label = "the .insert_site_plot.gz file ouput from bacteria_tradis")#,
+      #height = "200px"
+    )
   ),
   verbatimTextOutput("plot_status",
                      placeholder = T),
@@ -91,36 +93,31 @@ server <- function(input, output) {
   })
   
 
+  
   output$plot_status <- renderText({
     sites <- insertion_sites()
     paste("Rows:", nrow(sites),
           "| Forward insertions:", sum(sites$fwd_insertions, na.rm = TRUE))
   })
-  
 
+
+  # working very simple example using an input variable
+  # now to add my own plot
   output$insertion_plot <- renderPlot({
-    
+
     sites  <- insertion_sites()
-    
+    sites <- dplyr::filter(sites, position <= 1000)
+
     ggplot(sites, aes(fwd_insertions)) +
-      geom_histogram(colour = input$BINARY) +
-      labs(x = "Forward insertions")
+      geom_histogram() +
+      labs(x = "Forward insertions") +
+      scale_y_continuous(limits = c(0, input$MAX_PLOT_HEIGHT))
   })
   
+
   
   
   
-  
-    # output$distPlot <- renderPlot({
-    #     # generate bins based on input$bins from ui.R
-    #     x    <- faithful[, 2]
-    #     bins <- seq(min(x), max(x), length.out = input$bins + 1)
-    # 
-    #     # draw the histogram with the specified number of bins
-    #     hist(x, breaks = bins, col = 'darkgray', border = 'white',
-    #          xlab = 'Waiting time to next eruption (in mins)',
-    #          main = 'Histogram of waiting times')
-    # })
 }
 
 # Run the app
