@@ -61,9 +61,11 @@ en <- 4159587
 # ncRNA
 st <- 775139
 en <- 779139
-# pseudogene
+# pseudogene smaller
 st <- 19000
 en <- 21000
+# pseudogene bigger region
+st <- 14000
 en <- 25000
 # features in ecoli to look at
 #dnaA 3875686	3877089
@@ -301,4 +303,4 @@ p_insertions / p_features +
   plot_layout(heights = c(3, 1))
 
 # save the plot
-ggsave("insertion_site_plot_MAX_PLOT_HEIGHT10.pdf", device = "pdf", units = "cm", height = PLOT_HEIGHT, width = PLOT_WIDTH)
+ggsave("insertion_site_plot_RNA.pdf", device = "pdf", units = "cm", height = PLOT_HEIGHT, width = PLOT_WIDTH)
