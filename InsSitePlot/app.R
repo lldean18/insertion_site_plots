@@ -19,21 +19,60 @@ source("APP_file_prep_for_insertion_site_plot.R")
 ui <- page_sidebar(
   title = "Insertion site plot",
   sidebar = sidebar("Plotting options",
-                    radioButtons(
+                    # input desired chromosome
+                    textInput(
+                      "chr",
+                      label = "Chromosome to plot:",
+                      value = "NZ_CP009273.1"
+                    ),
+                    # input start position to plot
+                    numericInput(
+                      "st",
+                      label = "Start position:",
+                      value = 3862000
+                    ),
+                    # input end position to plot
+                    numericInput(
+                      "en",
+                      label = "End position:",
+                      value = 3868000
+                    ),
+                    # input whether forward and reverse strand features should be separated on the y-axis
+                    checkboxInput(
+                      inputId = "SEP_FWD_REV",
+                      label = "Separate features by strand?",
+                      value = F
+                    ),
+                    # input whether the features should be rainbow colours
+                    checkboxInput(
+                      inputId = "RAINBOW",
+                      label = "Plot rainbow feature colours?",
+                      value = F
+                    ),
+                    # input whether insertion site y-axis should be scaled or binary
+                    checkboxInput(
                       inputId = "BINARY",
-                      label = "Insertion bar display:",
-                      choices = c("Scaled" = F, "Binary" = T)
-                      ),
+                      label = "Only show insertion site locations? (not counts)",
+                      value = F
+                    ),
+                    # input the colour for plotting forward insertion bars
+                    selectInput("FWD_BAR_COLOUR",
+                                label = "Select colour for forward-strand insertion bars", 
+                                choices = list("blue" = "blue3", "red" = "red4", "orange" = "orange3"), 
+                                selected = "blue"),
+                    # input the colour for plotting the reverse insertion bars
+                    selectInput("REV_BAR_COLOUR",
+                                label = "Select colour for reverse-strand insertion bars", 
+                                choices = list("pink" = "deeppink", "red" = "red4", "orange" = "orange3"), 
+                                selected = "pink"),
+                    #input the maximum plot height
                     numericInput(
                       "MAX_PLOT_HEIGHT",
                       label = "To restrict the height of the y axis, enter a maximum plot height:",
                       value = NULL
                       ),
-                    radioButtons(
-                      inputId = "SEP_FWD_REV",
-                      label = "Do you wish to separate features by strand?",
-                      choices = c("no","yes")
-                      ),
+                    
+                    
                     textInput(
                       "HIGHLIGHT_GENE",
                       label = "Enter the name of the gene to highlight:",
@@ -48,11 +87,8 @@ ui <- page_sidebar(
                       "PLOT_WIDTH",
                       label = "Set the output plot width (cm)",
                       value = 30
+                    )
                     ),
-                    selectInput("select", "Select option",
-                                choices = list("Choice 1" = 1, "Choice 2" = 2, "Choice 3" = 3),
-                                selected = 1
-                    )),
   layout_columns(fill = F,
     card(
       card_header("Genome assembly upload:"),
@@ -70,20 +106,21 @@ ui <- page_sidebar(
       #height = "200px"
     )
   ),
-  verbatimTextOutput("plot_status",
-                     placeholder = T),
+
 #  actionButton("plot", "Draw plot"),
   plotOutput("insertion_plot")
 )
 
 
 
-
-# setup the server logic
+##########################
+# setup the server logic #
+##########################
 server <- function(input, output) {
   
-  # make the insertions data frame from user input files
-  insertion_sites <- reactive({
+  # make the insertions data frame from user input files #
+  ########################################################
+  insertion_sites_R <- reactive({
     #list required inputs before running
     req(input$fasta_file, input$gff_file, input$insertions_file)
     #prep insertion files
@@ -92,32 +129,172 @@ server <- function(input, output) {
                          read.table(input$insertions_file$datapath))
   })
   
-
+  # setup that doesn't depend on user input #
+  ###########################################
+  # Define arrow dimensions
+  arrow_height <- 14
+  arrow_head_length <- 0.2  # Fraction of feature length
+  arrow_head_height <- 1.3   # Relative to arrow half-height
   
-  output$plot_status <- renderText({
-    sites <- insertion_sites()
-    paste("Rows:", nrow(sites),
-          "| Forward insertions:", sum(sites$fwd_insertions, na.rm = TRUE))
-  })
-
-
-  # working very simple example using an input variable
-  # now to add my own plot
+  
+  # THE PLOT #
+  ############
   output$insertion_plot <- renderPlot({
-
-    sites  <- insertion_sites()
-    sites <- dplyr::filter(sites, position <= 1000)
-
-    ggplot(sites, aes(fwd_insertions)) +
-      geom_histogram() +
-      labs(x = "Forward insertions") +
-      scale_y_continuous(limits = c(0, input$MAX_PLOT_HEIGHT))
+    
+    # get the insertion sites from the input files
+    insertion_sites <- insertion_sites_R()
+    
+    # filter data to the region for plotting
+    my_region <- dplyr::filter(insertion_sites, chromosome == input$chr & position >= input$st & position <= input$en)
+    
+    # Summarise the genomic coordinates of each feature
+    features <- my_region %>%
+      dplyr::group_by(feature_name, feature_ID, feature_type, feature_strand, feature_phase) %>%
+      dplyr::summarise(start = min(position), end = max(position), .groups = "drop") %>%
+      dplyr::mutate(length = end - start, body_height = arrow_height * 0.6,
+             head_height = arrow_height, head_length = length * arrow_head_length)
+    
+    # ensure that feature ID is unique
+    n <- nrow(dplyr::filter(features, duplicated(features$feature_ID)))
+    features$feature_ID <- ifelse(duplicated(features$feature_ID),
+                                  paste0(features$feature_ID, "_", seq_along(n)),
+                                  features$feature_ID)
+    rm(n)
+    
+    # remove the "cds-" string from the beginning of feature names
+    features$feature_name <- sub("cds-", "", features$feature_name)
+    
+    # Determine whether features occur on both strands
+    both_strands <- any(features$feature_strand == "+", na.rm = TRUE) &&
+      any(features$feature_strand == "-", na.rm = TRUE)
+    
+    # Place features just below zero; separate strands only if both are present
+    features <- features %>%
+      dplyr::mutate(y_offset = if (both_strands && input$SEP_FWD_REV) {
+        ifelse(feature_strand == "+", -arrow_height * 0.7, -arrow_height * 2.1)
+      } else {-arrow_height * 0.7})
+    
+    # add feature fill colour
+    features$fill_colour <- ifelse(tolower(features$feature_name) == tolower(input$HIGHLIGHT_GENE),
+                                   {if (input$RAINBOW) "grey70" else "lightpink"},
+                                   {if (input$RAINBOW) as.character(features$feature_ID) else "grey70"})
+    
+    # Prepare forward and reverse insertion bars
+    if (input$BINARY) {
+      fwd_bars <- my_region %>%
+        dplyr::filter(fwd_insertions > 0) %>%
+        dplyr::mutate(ymin = 0, ymax = 10)
+      rev_bars <- my_region %>%
+        dplyr::filter(rev_insertions > 0) %>%
+        dplyr::mutate(ymin = 0, ymax = 10)
+    } else {
+      fwd_bars <- my_region %>%
+        dplyr::mutate(ymin = 0, ymax = 0 + fwd_insertions)
+      rev_bars <- my_region %>%
+        dplyr::mutate(ymin = 0, ymax = 0 + rev_insertions)
+    }
+    
+    # Calculate arrow polygon coordinates for CDS features and pseudo genes
+    arrow_polygons <- features %>%
+      dplyr::filter(feature_type == "CDS" | feature_type == "pseudogene") %>%
+      rowwise() %>%
+      do(data.frame(feature_name = .$feature_name,
+                    feature_ID = .$feature_ID,
+                    feature_type = .$feature_type,
+                    feature_strand = .$feature_strand,
+                    fill_colour = .$fill_colour,
+                    x = if (.$feature_strand == "+") {
+                      c(.$start, .$end - .$head_length, .$end - .$head_length,
+                        .$end, .$end - .$head_length, .$end - .$head_length, .$start)
+                    } else {
+                      c(.$end, .$start + .$head_length, .$start + .$head_length,
+                        .$start, .$start + .$head_length, .$start + .$head_length, .$end)
+                    },
+                    y = c(.$y_offset - .$body_height, .$y_offset - .$body_height,
+                          .$y_offset - .$head_height, .$y_offset,
+                          .$y_offset + .$head_height, .$y_offset + .$body_height,
+                          .$y_offset + .$body_height)
+      )) %>%
+      ungroup() %>%
+      dplyr::mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
+    
+    # add calculation for body lines for pseudogenes
+    body_lines <- if (nrow(dplyr::filter(arrow_polygons, feature_type == "pseudogene")) > 0 ) {
+      arrow_polygons %>%
+        dplyr::filter(feature_type == "pseudogene") %>%
+        dplyr::group_by(feature_ID) %>%  # if feature_ID groups are intended
+        dplyr::summarise(
+          x_start = if (first(feature_strand) == "+") {
+            min(x)
+          } else { min(x[x != min(x)]) },
+          x_end = if (first(feature_strand) == "+") {
+            max(x[x != max(x)])
+          } else { max(x) },
+          y_max = max(y[y != max(y)]),
+          y_min = min(y[y != min(y)]),
+          .groups = "drop")
+    }
+    
+    # prepare RNA triangles
+    rna_triangles <- features %>%
+      dplyr::filter(feature_type %in% c("rRNA", "tRNA", "ncRNA")) %>%
+      dplyr::mutate(triangle_width = body_height,
+             tip = ifelse(feature_strand == "+", end, start),
+             base = ifelse(feature_strand == "+", start, end)) %>%
+      rowwise() %>%
+      reframe(feature_ID = feature_ID, feature_type = feature_type, x = c(base, base, tip),
+              y = c(y_offset + triangle_width, y_offset - triangle_width, y_offset + triangle_width)) %>%
+      ungroup()
+    
+    # set the feature colour order for rainbow arrows
+    feature_order <- arrow_polygons %>%
+      dplyr::distinct(feature_ID, x) %>%
+      dplyr::arrange(x) %>%
+      pull(feature_ID) %>%
+      unique() %>%
+      as.character()
+    
+    # INSERTIONS PLOT
+    #p_insertions <- 
+      ggplot() +
+      # Forward insertion bars
+      geom_rect(data = fwd_bars,
+                aes(xmin = position - ((input$en - input$st) /1000), xmax = position + ((input$en - input$st) /1000),
+                    ymin = ymin, ymax = ymax), fill = input$FWD_BAR_COLOUR, alpha = 0.5) +
+      #  Reverse insertion bars
+      geom_rect(data = rev_bars,
+                aes(xmin = position - ((input$en - input$st) /1000), xmax = position + ((input$en - input$st) /1000),
+                    ymin = ymin, ymax = ymax), fill = input$REV_BAR_COLOUR, alpha = 0.5) +
+      # Axis labels and theme
+      labs(x = "Genomic position (bp)", y = {if (input$BINARY) "Insertions" else "Insertion count"}) +
+      {if (!is.null(input$MAX_PLOT_HEIGHT)) coord_cartesian(ylim = c(0, input$MAX_PLOT_HEIGHT))} +
+      scale_y_continuous(labels = {if (input$BINARY) NULL else abs}, limits = c(0, NA), expand = expansion(mult = c(0, 0.02))) +
+      theme_classic() +
+      theme(axis.title = element_text(size = 12),
+            plot.title = element_text(size = 14, face = "bold"),
+            axis.text.y = {if (input$BINARY) element_blank() else element_text()},
+            axis.ticks.y = {if (input$BINARY) element_blank() else element_line()},
+            axis.line.y = {if (input$BINARY) element_blank() else element_line()},
+            plot.margin = margin(0, 0, 0, 0))
+    
   })
-  
+
 
   
-  
-  
+
+  # # working very simple example using an input variable
+  # # now to add my own plot
+  # output$insertion_plot <- renderPlot({
+  # 
+  #   sites  <- insertion_sites()
+  #   sites <- dplyr::filter(sites, position <= 1000)
+  # 
+  #   ggplot(sites, aes(fwd_insertions)) +
+  #     geom_histogram() +
+  #     labs(x = "Forward insertions") +
+  #     scale_y_continuous(limits = c(0, input$MAX_PLOT_HEIGHT))
+  # })
+
 }
 
 # Run the app
