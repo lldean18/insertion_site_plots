@@ -65,24 +65,31 @@ ui <- page_sidebar(
                                 label = "Select colour for reverse-strand insertion bars", 
                                 choices = list("pink" = "deeppink", "red" = "red4", "orange" = "orange3"), 
                                 selected = "pink"),
-                    #input the maximum plot height
+                    # input the maximum plot height
                     numericInput(
                       "MAX_PLOT_HEIGHT",
                       label = "To restrict the height of the y axis, enter a maximum plot height:",
                       value = NULL
                       ),
-                    
-                    
+                    # input the gene to highlight if any
                     textInput(
                       "HIGHLIGHT_GENE",
-                      label = "Enter the name of the gene to highlight:",
+                      label = "Name of gene to highlight:",
                       value = ""
                       ),
+                    # input the output file name
+                    textInput(
+                      "OUT_FILE",
+                      label = "Name of output file:",
+                      value = "insertion_site_plot.pdf"
+                    ),
+                    # input the desired output plot height
                     numericInput(
                       "PLOT_HEIGHT",
                       label = "Set the output plot height (cm)",
                       value = 10
                     ),
+                    # input the desired output plot width
                     numericInput(
                       "PLOT_WIDTH",
                       label = "Set the output plot width (cm)",
@@ -255,7 +262,7 @@ server <- function(input, output) {
       as.character()
     
     # INSERTIONS PLOT
-    #p_insertions <- 
+    p_insertions <- 
       ggplot() +
       # Forward insertion bars
       geom_rect(data = fwd_bars,
@@ -276,6 +283,88 @@ server <- function(input, output) {
             axis.ticks.y = {if (input$BINARY) element_blank() else element_line()},
             axis.line.y = {if (input$BINARY) element_blank() else element_line()},
             plot.margin = margin(0, 0, 0, 0))
+    
+    # FEATURES PLOT
+    p_features <- ggplot() +
+      # CDS feature arrows
+      geom_polygon(data = dplyr::filter(arrow_polygons, feature_type == "CDS"),
+                   aes(x = x, y = y, group = feature_ID, fill = fill_colour, colour = fill_colour)) +
+      # highlighted gene feature arrow if RAINBOW
+      {if (input$RAINBOW)
+        ggpattern::geom_polygon_pattern(data = dplyr::filter(arrow_polygons, feature_type == "CDS" &
+                                             tolower(feature_name) == tolower(input$HIGHLIGHT_GENE)),
+                             aes(x=x, y=y, group = feature_ID, fill = "grey"),
+                             pattern = "gradient", pattern_orientation = "radial",
+                             pattern_fill = "grey", pattern_fill2 = "black") } +
+      # Pseudogene feature arrows
+      ggpattern::geom_polygon_pattern(data = dplyr::filter(arrow_polygons, feature_type == "pseudogene"),
+                           aes(x = x, y = y, group = feature_ID, fill = fill_colour),
+                           pattern = "stripe", pattern_angle = 45, pattern_spacing = 0.05,
+                           pattern_density = 0.05, colour = "black", pattern_colour = "grey40") +
+      # crosses across pseudogene feature arrows
+      {if (!is.null(body_lines))
+        geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_min, yend = y_max),
+                     inherit.aes = FALSE, colour = "black") } +
+      {if (!is.null(body_lines))
+        geom_segment(data = body_lines, aes(x = x_start, xend = x_end, y = y_max, yend = y_min),
+                     inherit.aes = FALSE, colour = "black")} +
+      # scale for arrow fill
+      {if (input$RAINBOW) {
+        scale_fill_manual(values = c(setNames(grDevices::colorRampPalette(
+          c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
+        )(length(feature_order)),
+        feature_order), "grey70" = "grey70"), guide = "none")
+      } else {
+        scale_fill_identity(guide = "none")
+      }} +
+      # scale for arrow outline
+      {if (input$RAINBOW) {
+        scale_colour_manual(values = c(setNames(grDevices::colorRampPalette(
+          c("goldenrod1", "sandybrown", "indianred2", "mediumpurple2", "skyblue3")
+        )(length(feature_order)),
+        feature_order), "grey70" = "black"), guide = "none")
+      } else {
+        scale_colour_identity(guide = "none")
+      }} +
+      
+      # rRNA, ncRNA and tRNA triangles
+      {if (any(rna_triangles$feature_type == "rRNA")) geom_polygon(data = dplyr::filter(rna_triangles, feature_type == "rRNA"),
+                                                                   aes(x = x, y = y, group = feature_ID), fill = "grey30", colour = "grey30")} +
+      {if (any(rna_triangles$feature_type == "ncRNA")) geom_polygon(data = dplyr::filter(rna_triangles, feature_type == "ncRNA"),
+                                                                    aes(x = x, y = y, group = feature_ID), fill = "grey30", colour = "grey30")} +
+      {if (any(rna_triangles$feature_type == "tRNA")) geom_polygon(data = dplyr::filter(rna_triangles, feature_type == "tRNA"),
+                                                                   aes(x = x, y = y, group = feature_ID), fill = "grey30", colour = "grey30")} +
+      # CDS feature IDs centered inside the arrows
+      geom_text(data = features %>% filter(feature_type == "CDS"),
+                aes(x = (start + end) / 2, y = y_offset, label = feature_name), fontface = "italic", size = 3, colour = "black") +
+      # highlighted gene label with box behind
+      geom_label(data = features %>% dplyr::filter(feature_type == "CDS" & tolower(feature_name) == tolower(input$HIGHLIGHT_GENE)), 
+                 aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
+                 size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
+      # pseudogene feature IDs with box behind
+      geom_label(data = features %>% dplyr::filter(feature_type == "pseudogene"), 
+                 aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
+                 size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
+      # Axis labels and theme
+      labs(x = "Genomic position (bp)", y = NULL) +
+      scale_x_continuous(limits = c(input$st, input$en), expand = expansion(mult = 0)) +
+      theme_classic() +
+      theme(axis.title = element_text(size = 12),
+            plot.title = element_text(size = 14, face = "bold"),
+            axis.text.y = element_blank(),
+            axis.ticks.y = element_blank(),
+            axis.line.y = element_blank(),
+            legend.position = "None",
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
+            axis.title.x = element_blank(),
+            axis.line.x = element_blank(),
+            plot.margin = margin(0, 0, 0, 0))
+    
+    # plot the two together
+    p_insertions / p_features +
+      plot_layout(heights = c(3, 1))
+    
     
   })
 
