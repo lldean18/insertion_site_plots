@@ -68,7 +68,7 @@ ui <- page_sidebar(
                     # input the maximum plot height
                     numericInput(
                       "MAX_PLOT_HEIGHT",
-                      label = "To restrict the height of the y axis, enter a maximum plot height:",
+                      label = "To restrict the height of the y-axis, enter a maximum plot height:",
                       value = NULL
                       ),
                     # input the gene to highlight if any
@@ -94,7 +94,12 @@ ui <- page_sidebar(
                       "PLOT_WIDTH",
                       label = "Set the output plot width (cm)",
                       value = 30
-                    )
+                    ),
+                    # add save the plot button
+                    downloadButton(
+                      "PLOT_SAVE",
+                      label = "Save the plot"
+                      )
                     ),
   layout_columns(fill = F,
     card(
@@ -146,7 +151,7 @@ server <- function(input, output) {
   
   # THE PLOT #
   ############
-  output$insertion_plot <- renderPlot({
+  plot_to_save <- reactive({
     
     # get the insertion sites from the input files
     insertion_sites <- insertion_sites_R()
@@ -365,24 +370,34 @@ server <- function(input, output) {
     p_insertions / p_features +
       plot_layout(heights = c(3, 1))
     
+#    # save the plot
+#    ggsave(input$OUT_FILE, device = "pdf", units = "cm",
+#           height = input$PLOT_HEIGHT, input$width = PLOT_WIDTH)
+    
     
   })
 
-
+  # show the plot in the app
+  output$insertion_plot <- renderPlot({
+    plot_to_save()
+  })
   
-
-  # # working very simple example using an input variable
-  # # now to add my own plot
-  # output$insertion_plot <- renderPlot({
-  # 
-  #   sites  <- insertion_sites()
-  #   sites <- dplyr::filter(sites, position <= 1000)
-  # 
-  #   ggplot(sites, aes(fwd_insertions)) +
-  #     geom_histogram() +
-  #     labs(x = "Forward insertions") +
-  #     scale_y_continuous(limits = c(0, input$MAX_PLOT_HEIGHT))
-  # })
+  # save the plot when the save plot button is pressed
+  output$PLOT_SAVE <- downloadHandler(
+    filename = function() {
+      input$OUT_FILE
+    },
+    content = function(file) {
+      ggsave(
+        filename = file,
+        plot = plot_to_save(),
+        device = "pdf",
+        units = "cm",
+        height = input$PLOT_HEIGHT,
+        width = input$PLOT_WIDTH
+      )
+    }
+  )
 
 }
 
