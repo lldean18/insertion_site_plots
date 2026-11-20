@@ -64,12 +64,16 @@ ui <- page_sidebar(
                     # input the colour for plotting forward insertion bars
                     selectInput("FWD_BAR_COLOUR",
                                 label = "Select colour for forward-strand insertion bars", 
-                                choices = list("blue" = "blue3", "red" = "red4", "orange" = "orange3"), 
+                                choices = list("blue" = "blue3", "red" = "red","darkred" = "darkred", "orange" = "orange2",
+                                               "green" = "green4", "purple" = "purple4", "yellow" = "yellow2",
+                                               "pink" = "deeppink2", "lightpink" = "pink", "black" = "black", "grey" = "grey30"), 
                                 selected = "blue"),
                     # input the colour for plotting the reverse insertion bars
                     selectInput("REV_BAR_COLOUR",
                                 label = "Select colour for reverse-strand insertion bars", 
-                                choices = list("pink" = "deeppink", "red" = "red4", "orange" = "orange3"), 
+                                choices = list("blue" = "blue3", "red" = "red","darkred" = "darkred", "orange" = "orange2",
+                                               "green" = "green4", "purple" = "purple4", "yellow" = "yellow2",
+                                               "pink" = "deeppink2", "lightpink" = "pink", "black" = "black", "grey" = "grey30"), 
                                 selected = "pink"),
                     # input the maximum plot height
                     numericInput(
