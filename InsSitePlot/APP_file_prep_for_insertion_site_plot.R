@@ -5,6 +5,7 @@
 #### read in the files ####
 
 #fasta_file = "GCF_000750555.1_ASM75055v1_genomic.fna"
+#fasta_file = "323630L_Photorhabduskhanii.fna"
 read.fasta <- function(fasta_file) {
   
   # read in assembly file
@@ -37,7 +38,8 @@ read.fasta <- function(fasta_file) {
 #genome_positions <- read.fasta(fasta_file)
 
 #gff_file = "GCF_000750555.1_ASM75055v1_genomic.gff"
-read.gff <- function(gff_file) {
+#gff_file = "323630L_Photorhabduskhanii.gff"
+read.gff <- function(gff_file, chr, st, en) {
   
   # read in the file
   gff_lines <- readLines(gff_file) # read each line separately
@@ -73,19 +75,39 @@ read.gff <- function(gff_file) {
   names(gff)[names(gff) == "strand"] <- "feature_strand"
   names(gff)[names(gff) == "phase"] <- "feature_phase"
   
+  # filter only to the region of interest
+  gff <- dplyr::filter(gff, chromosome == chr & start >= st & end <= en)
+  
   return(gff)
   
 }
 #gff <- read.gff(gff_file)
+#gff <- read.gff(gff_file, "contig_1", 4000, 10000)
 
 #insertions <- read.table("BWtacXpress1_EKDL260002324-1A_23GK55LT4_L5_1.fq.gz.NZ_CP009273.1.insert_site_plot.gz")
+#insertions <- read.table("combined.insert_site_plot.gz")
 
-### process the files ###
-prep_insertion_files <- function(genome_positions, gff, insertions) {
+#####################################################
+########## TRYING TO USE LESS MEMORY ################
+### process insertion sites only then filter
+prep_insertion_sites <- function(genome_positions, insertions, chr, st, en) {
   
   # Merge the assembly and insertion site info
   insertion_sites <- cbind(genome_positions, insertions)
   colnames(insertion_sites) <- c("chromosome","position","fwd_insertions","rev_insertions")
+  
+  # filter the insertion sites to the region of interest
+  insertion_sites_flt <- dplyr::filter(insertion_sites, chromosome == chr & position >= st & position <= en)
+  
+  return(insertion_sites_flt)
+  
+}
+
+# testing
+#test <- prep_insertion_sites(genome_positions, insertions, "contig_1", 4000, 10000)
+
+### process the files ###
+prep_insertion_files <- function(insertion_sites, gff) {
   
   # Convert to data.table
   insertion_sites_dt <- data.table::as.data.table(insertion_sites)
@@ -160,6 +182,99 @@ prep_insertion_files <- function(genome_positions, gff, insertions) {
   return(insertion_sites_annotated)
   
 }
+
+# testing
+#test2 <- prep_insertion_files(test, gff)
+
+#####################################################
+
+
+
+
+
+
+
+
+# ### process the files ###
+# prep_insertion_files <- function(genome_positions, gff, insertions) {
+#   
+#   # Merge the assembly and insertion site info
+#   insertion_sites <- cbind(genome_positions, insertions)
+#   colnames(insertion_sites) <- c("chromosome","position","fwd_insertions","rev_insertions")
+#   
+#   # Convert to data.table
+#   insertion_sites_dt <- data.table::as.data.table(insertion_sites)
+#   gff_dt <- data.table::as.data.table(gff)
+#   
+#   # Preserve original row numbers
+#   insertion_sites_dt[, site_id := .I]
+#   gff_dt[, annotation_id := .I]
+#   
+#   # Represent insertion sites as single-base intervals
+#   insertion_sites_dt[, `:=`(
+#     start = position,
+#     end = position
+#   )]
+#   
+#   # Keep the required GFF columns
+#   gff_dt <- gff_dt[, .(
+#     chromosome,
+#     start,
+#     end,
+#     annotation_id,
+#     feature_name,
+#     feature_ID,
+#     feature_strand,
+#     feature_type,
+#     feature_phase
+#   )]
+#   
+#   # Index the GFF annotations
+#   data.table::setkey(gff_dt, chromosome, start, end)
+#   
+#   # Find overlaps between insertion sites and GFF annotations
+#   overlaps <- data.table::foverlaps(
+#     insertion_sites_dt,
+#     gff_dt,
+#     by.x = c("chromosome", "start", "end"),
+#     by.y = c("chromosome", "start", "end"),
+#     type = "within",
+#     nomatch = NA
+#   )
+#   
+#   # Select the last matching annotation for each insertion site
+#   # Keep all overlapping annotations, preserving NA values
+#   annotations <- overlaps[
+#     !is.na(annotation_id),
+#     .(
+#       site_id,
+#       feature_name,
+#       feature_ID,
+#       feature_strand,
+#       feature_type,
+#       feature_phase
+#     )
+#   ]
+#   
+#   # Join annotations to the original insertion site information
+#   insertion_sites_annotated <- merge(
+#     data.table::as.data.table(insertion_sites)[, .(site_id = .I, .SD)],
+#     annotations,
+#     by = "site_id",
+#     all.x = TRUE,
+#     sort = FALSE,
+#     suffixes = c("", "_annotation")
+#   )
+#   
+#   # Convert back to a data.frame if desired
+#   insertion_sites_annotated <- as.data.frame(insertion_sites_annotated)
+#   
+#   # get rid of the additional string in column names
+#   insertion_sites_annotated <- insertion_sites_annotated %>% rename_with(~str_remove(., '.SD.'))
+#   
+#   return(insertion_sites_annotated)
+#   
+# }
 #insertion_sites_annotated <- prep_insertion_files(genome_positions, gff, insertions)
 
 

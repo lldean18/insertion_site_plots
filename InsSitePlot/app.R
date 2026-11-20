@@ -1,3 +1,9 @@
+# package for shiny app deployment
+# install.packages('rsconnect')
+# to deploy the app
+# library(rsconnect)
+# rsconnect::deployApp('InsSitePlot')
+
 # install packages if required
 list.of.packages <- c("tidyverse", "data.table", "patchwork", "ggpattern", "shiny", "bslib")
 new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
@@ -104,22 +110,18 @@ ui <- page_sidebar(
   layout_columns(fill = F,
     card(
       card_header("Genome assembly upload:"),
-      fileInput("fasta_file", label = "must be in fasta format (.fa .fasta .fna)")#,
-      #height = "200px"
+      fileInput("fasta_file", label = "must be in fasta format (.fa .fasta .fna)")
     ),
     card(
       card_header("Annotation file upload:"),
-      fileInput("gff_file", label = "must be in gff format (.gff)")#,
-      #height = "200px"
+      fileInput("gff_file", label = "must be in gff format (.gff)")
     ),
     card(
       card_header("Insertion site data upload:"),
-      fileInput("insertions_file", label = "the .insert_site_plot.gz file ouput from bacteria_tradis")#,
-      #height = "200px"
+      fileInput("insertions_file", label = "the .insert_site_plot.gz file ouput from bacteria_tradis")
     )
   ),
 
-#  actionButton("plot", "Draw plot"),
   plotOutput("insertion_plot")
 )
 
@@ -130,16 +132,43 @@ ui <- page_sidebar(
 ##########################
 server <- function(input, output) {
   
+  options(shiny.maxRequestSize=30*1024^2)
+  
   # make the insertions data frame from user input files #
   ########################################################
+  
+  # # read in and prep fasta and inserions file
+  # fastaR <- reactive({
+  #   req(input$fasta_file)
+  #   prep_insertion_sites(read.fasta(input$fasta_file$datapath),
+  #                        read.table(input$insertions_file$datapath),
+  #                        input$chr, input$st, input$en
+  #                        )
+  #   
+  # })
+
   insertion_sites_R <- reactive({
     #list required inputs before running
-    req(input$fasta_file, input$gff_file, input$insertions_file)
+    req(input$fasta_file, input$gff_file, input$insertions_file, input$chr, input$st, input$en)
     #prep insertion files
-    prep_insertion_files(read.fasta(input$fasta_file$datapath),
-                         read.gff(input$gff_file$datapath),
-                         read.table(input$insertions_file$datapath))
+    prep_insertion_files(prep_insertion_sites(read.fasta(input$fasta_file$datapath),
+                                              read.table(input$insertions_file$datapath),
+                                              input$chr, input$st, input$en
+                                              ),
+                         read.gff(input$gff_file$datapath, input$chr, input$st, input$en))
   })
+  
+  
+  
+  
+  #   insertion_sites_R <- reactive({
+  #   #list required inputs before running
+  #   req(input$fasta_file, input$gff_file, input$insertions_file)
+  #   #prep insertion files
+  #   prep_insertion_files(read.fasta(input$fasta_file$datapath),
+  #                        read.gff(input$gff_file$datapath, input$chr, input$st, input$en),
+  #                        read.table(input$insertions_file$datapath))
+  # })
   
   # setup that doesn't depend on user input #
   ###########################################
@@ -159,12 +188,28 @@ server <- function(input, output) {
     # filter data to the region for plotting
     my_region <- dplyr::filter(insertion_sites, chromosome == input$chr & position >= input$st & position <= input$en)
     
-    # Summarise the genomic coordinates of each feature
-    features <- my_region %>%
+    # Summarise the genomic coordinates of each feature ###
+    features <- if (all(is.na(my_region$feature_ID))) {
+      tibble::tibble(
+        feature_name = character(),
+        feature_ID = character(),
+        feature_type = character(),
+        feature_strand = character(),
+        feature_phase = character(),
+        start = numeric(),
+        end = numeric(),
+        length = numeric(),
+        body_height = numeric(),
+        head_height = numeric(),
+        head_length = numeric()
+      )
+    } else {
+      my_region %>%
       dplyr::group_by(feature_name, feature_ID, feature_type, feature_strand, feature_phase) %>%
       dplyr::summarise(start = min(position), end = max(position), .groups = "drop") %>%
       dplyr::mutate(length = end - start, body_height = arrow_height * 0.6,
              head_height = arrow_height, head_length = length * arrow_head_length)
+    }
     
     # ensure that feature ID is unique
     n <- nrow(dplyr::filter(features, duplicated(features$feature_ID)))
@@ -207,7 +252,18 @@ server <- function(input, output) {
     }
     
     # Calculate arrow polygon coordinates for CDS features and pseudo genes
-    arrow_polygons <- features %>%
+    arrow_polygons <- if (all(is.na(features$feature_ID))) {
+      tibble::tibble(
+        feature_name = character(),
+        feature_ID = character(),
+        feature_type = character(),
+        feature_strand = character(),
+        fill_colour = character(),
+        x = numeric(),
+        y = numeric()
+      )
+    } else {
+      features %>%
       dplyr::filter(feature_type == "CDS" | feature_type == "pseudogene") %>%
       rowwise() %>%
       do(data.frame(feature_name = .$feature_name,
@@ -228,7 +284,8 @@ server <- function(input, output) {
                           .$y_offset + .$body_height)
       )) %>%
       ungroup() %>%
-      dplyr::mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID)))
+      dplyr::mutate(feature_ID = factor(feature_ID, levels = unique(feature_ID))) ###
+    }
     
     # add calculation for body lines for pseudogenes
     body_lines <- if (nrow(dplyr::filter(arrow_polygons, feature_type == "pseudogene")) > 0 ) {
@@ -345,11 +402,11 @@ server <- function(input, output) {
       # highlighted gene label with box behind
       geom_label(data = features %>% dplyr::filter(feature_type == "CDS" & tolower(feature_name) == tolower(input$HIGHLIGHT_GENE)), 
                  aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
-                 size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
+                 size = 3, colour = "black", linewidth = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
       # pseudogene feature IDs with box behind
       geom_label(data = features %>% dplyr::filter(feature_type == "pseudogene"), 
                  aes(x = (start + end) / 2, y = y_offset, label = feature_name, fill = fill_colour), fontface = "italic",
-                 size = 3, colour = "black", label.size = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
+                 size = 3, colour = "black", linewidth = 0.2, label.padding = unit(0.1, "lines"), border.colour = NA) +
       # Axis labels and theme
       labs(x = "Genomic position (bp)", y = NULL) +
       scale_x_continuous(limits = c(input$st, input$en), expand = expansion(mult = 0)) +
