@@ -51,7 +51,6 @@ read.gff <- function(gff_file, chr, st, en) {
                     stringsAsFactors = FALSE) # Read the annotation into a data frame
   colnames(gff) <- c("chromosome","source","feature_type","start","end","score",
                      "strand","phase","attributes") # Assign column names
-  #rm(fasta_start, gff_lines) # clean up
   
   # remove columns containing the whole contigs as regions
   gff <- filter(gff, feature_type != "region")
