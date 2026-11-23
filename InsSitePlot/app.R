@@ -35,13 +35,13 @@ ui <- page_sidebar(
                     numericInput(
                       "st",
                       label = "Start position:",
-                      value = 3862000
+                      value = 10000
                     ),
                     # input end position to plot
                     numericInput(
                       "en",
                       label = "End position:",
-                      value = 3868000
+                      value = 20000
                     ),
                     # input whether forward and reverse strand features should be separated on the y-axis
                     checkboxInput(
